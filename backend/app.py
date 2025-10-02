@@ -8,35 +8,53 @@ from typing import List
 import uvicorn
 import time
 import logging
+import subprocess
+import sys
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def create_tables():
-    """Create database tables with retry logic"""
+def run_migrations():
+    """Run Alembic migrations with retry logic"""
     max_retries = 5
     retry_delay = 2
     
     for attempt in range(max_retries):
         try:
-            logger.info(f"Attempting to create tables (attempt {attempt + 1}/{max_retries})")
-            Base.metadata.create_all(bind=engine)
-            logger.info("Database tables created successfully")
+            logger.info(f"Attempting to run migrations (attempt {attempt + 1}/{max_retries})")
+            result = subprocess.run(
+                [sys.executable, "-m", "alembic", "upgrade", "head"],
+                cwd="/home/ubuntu/nsightTechnicalAssessment/backend",
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            logger.info("Database migrations completed successfully")
+            logger.info(f"Migration output: {result.stdout}")
             return True
-        except Exception as e:
-            logger.warning(f"Failed to create tables (attempt {attempt + 1}): {e}")
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Failed to run migrations (attempt {attempt + 1}): {e}")
+            logger.warning(f"Migration error: {e.stderr}")
             if attempt < max_retries - 1:
                 logger.info(f"Retrying in {retry_delay} seconds...")
                 time.sleep(retry_delay)
             else:
-                logger.error("Failed to create tables after all retries")
+                logger.error("Failed to run migrations after all retries")
+                raise e
+        except Exception as e:
+            logger.warning(f"Failed to run migrations (attempt {attempt + 1}): {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                logger.error("Failed to run migrations after all retries")
                 raise e
     
     return False
 
-# Create tables with retry logic
-create_tables()
+# Run migrations with retry logic
+run_migrations()
 
 app = FastAPI(
     title="User Profile API for Nsight Technical Assessment",
